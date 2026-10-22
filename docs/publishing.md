@@ -40,6 +40,13 @@ so the workflow is available on GitHub. Account setup does not publish a package
 
 ## Account setup
 
+Before publishing, review Sonatype's
+[commercial publishing policy](https://central.sonatype.org/news/20260908_publisher_tiers_commercial_use/).
+Since 1 October 2026, SDKs supporting a commercial product or service require
+Maven Central Publisher Pro regardless of publishing volume. An open-source
+license alone does not determine the classification. Confirm the appropriate
+plan or a Sonatype-approved exemption before publishing.
+
 1. Create or use a [Central Portal account](https://central.sonatype.com/).
 2. Ensure that account has publishing access to the `io.hivekit` namespace.
    If the namespace is already registered, have its organization administrator
