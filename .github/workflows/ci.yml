@@ -1,0 +1,29 @@
+name: SDK
+on: [push, pull_request]
+jobs:
+  sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: bash gradlew :sdk:check :sdk:assemble :sdk:publishAllPublicationsToBuildRepository
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: bash gradlew -PincludeAndroidSample=true :sample-android:assembleDebug :sample-android:assembleRelease :sample-android:lintDebug
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 23
+          arch: x86_64
+          script: bash gradlew -PincludeAndroidSample=true :sample-android:connectedDebugAndroidTest
