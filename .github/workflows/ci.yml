@@ -20,6 +20,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
       - uses: gradle/actions/setup-gradle@v4
       - run: bash gradlew -PincludeAndroidSample=true :sample-android:assembleDebug :sample-android:assembleRelease :sample-android:lintDebug
       - uses: reactivecircus/android-emulator-runner@v2
