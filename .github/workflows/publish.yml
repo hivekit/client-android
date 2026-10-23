@@ -1,10 +1,12 @@
-name: Publish to Maven Central
+name: Publish to JitPack
 
 on:
+  push:
+    tags: ['v[0-9]*']
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Release version matching an existing vVERSION tag (for example 0.1.0)'
+      tag:
+        description: 'Existing release tag, for example v0.1.1'
         required: true
         type: string
 
@@ -12,51 +14,54 @@ permissions:
   contents: read
 
 concurrency:
-  group: maven-central
+  group: jitpack-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: maven-central
+    timeout-minutes: 30
     env:
-      RELEASE_VERSION: ${{ inputs.version }}
+      SDK_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - name: Validate release version
+      - name: Validate release tag
         shell: bash
         run: |
-          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] ||
-             [[ "${RELEASE_VERSION^^}" == *-SNAPSHOT ]]; then
-            echo "::error::Use a non-SNAPSHOT version such as 0.1.0 or 0.1.0-rc.1."
+          if [[ ! "$SDK_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] ||
+             [[ "${SDK_TAG^^}" == *-SNAPSHOT ]]; then
+            echo "::error::Use a release tag such as v0.1.1 or v0.1.1-rc.1."
             exit 1
           fi
       - uses: actions/checkout@v4
         with:
-          ref: refs/tags/v${{ inputs.version }}
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Check and assemble the release
-        run: bash gradlew :sdk:check :sdk:publishAllPublicationsToBuildRepository "-PreleaseVersion=$RELEASE_VERSION" --no-daemon
-      - name: Sign and upload for Portal review
-        env:
-          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
-          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+      - name: Build the public JitPack release
         shell: bash
         run: |
-          for name in ORG_GRADLE_PROJECT_mavenCentralUsername ORG_GRADLE_PROJECT_mavenCentralPassword ORG_GRADLE_PROJECT_signingInMemoryKey ORG_GRADLE_PROJECT_signingInMemoryKeyPassword; do
-            if [[ -z "${!name}" ]]; then
-              echo "::error::Missing release credential: $name"
-              exit 1
-            fi
-          done
-          bash gradlew :sdk:publishToMavenCentral -PcentralRelease=true "-PreleaseVersion=$RELEASE_VERSION" --no-daemon --no-configuration-cache
-      - name: Release next step
+          curl --fail --location --retry 8 --retry-delay 10 --retry-all-errors --max-time 120 \
+            --output "$RUNNER_TEMP/hivekit.pom" \
+            "https://jitpack.io/com/github/hivekit/client-android/$SDK_TAG/client-android-$SDK_TAG.pom"
+      - name: Install the published SDK in an independent Android app
+        run: >
+          bash gradlew -p verification/android-consumer "-PsdkVersion=$SDK_TAG"
+          :app:assembleDebug :app:assembleRelease :app:lintDebug
+          --no-daemon
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 23
+          arch: x86_64
+          script: bash gradlew -p verification/android-consumer "-PsdkVersion=$SDK_TAG" :app:connectedDebugAndroidTest --no-daemon
+      - name: Published dependency
         shell: bash
         run: |
-          echo "Uploaded io.hivekit:client-android:$RELEASE_VERSION for validation." >> "$GITHUB_STEP_SUMMARY"
-          echo "Review the deployment in [Central Portal](https://central.sonatype.com/publishing/deployments) and click Publish after validation succeeds." >> "$GITHUB_STEP_SUMMARY"
+          echo '### JitPack release verified on Android API 23' >> "$GITHUB_STEP_SUMMARY"
+          echo "\`implementation(\"com.github.hivekit:client-android:$SDK_TAG\")\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Build log](https://jitpack.io/com/github/hivekit/client-android/$SDK_TAG/build.log)" >> "$GITHUB_STEP_SUMMARY"

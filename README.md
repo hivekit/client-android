@@ -10,7 +10,67 @@ A Kotlin-first client for Hivekit's native HTTP and WebSocket APIs, covering the
 
 This repository contains a single library in `sdk` and an optional Android example in `sample-android`. It does not collect device location or run a background Android service.
 
-## Build and consume
+## Install
+
+Use Kotlin 2.2 or later and JDK 17 for your Android build. The SDK supports
+Android API 23 and later.
+
+Add JitPack to your application's `settings.gradle.kts`, alongside Google and
+Maven Central. Restrict it to the Hivekit group:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        exclusiveContent {
+            forRepository { maven { url = uri("https://jitpack.io") } }
+            filter { includeGroup("com.github.hivekit") }
+        }
+    }
+}
+```
+
+Then add the SDK to your app module's `build.gradle.kts`:
+
+```kotlin
+dependencies {
+    implementation("com.github.hivekit:client-android:v0.1.1")
+}
+```
+
+Sync Gradle in Android Studio. Public installation needs no JitPack account,
+access token or manual download. Pin a release version; the `v` prefix is part
+of the JitPack version.
+
+Add the internet permission to your app's `AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+```
+
+Enable core library desugaring for Java time APIs below API 26, including
+`HistoryRange`:
+
+```kotlin
+android {
+    defaultConfig { minSdk = 23 }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+        isCoreLibraryDesugaringEnabled = true
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+}
+```
+
+Kotlin is the primary API. The same dependency works in JVM projects; this
+initial release does not add a separate Java callback facade.
+
+## Build from source
 
 Use JDK 17. The wrapper pins Gradle and verifies its distribution checksum.
 
@@ -22,35 +82,12 @@ Use JDK 17. The wrapper pins Gradle and verifies its distribution checksum.
 bash gradlew :sdk:check :sdk:assemble
 ```
 
-The Maven coordinates are `io.hivekit:client-android:0.1.0-SNAPSHOT` for development. The Maven Central account, namespace, signing key and GitHub publishing secrets are configured; the first release has not been published. See [the publishing guide](docs/publishing.md) for the configured publisher and release steps. Generate a local Maven repository with:
+For local development, `:sdk:publishAllPublicationsToBuildRepository` writes a
+Maven repository under `sdk/build/repository`. The default development coordinate
+is `com.github.hivekit:client-android:0.1.1-SNAPSHOT`.
 
-```shell
-bash gradlew :sdk:publishAllPublicationsToBuildRepository
-```
-
-It is written to `sdk/build/repository`. Add that directory as a Maven repository in a consuming project and use:
-
-```kotlin
-implementation("io.hivekit:client-android:0.1.0-SNAPSHOT")
-```
-
-Android applications need the `android.permission.INTERNET` permission. Enable core library desugaring for Java time APIs below API 26, including `HistoryRange`:
-
-```kotlin
-android {
-    defaultConfig { minSdk = 23 }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-        isCoreLibraryDesugaringEnabled = true
-    }
-}
-dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
-}
-```
-
-Kotlin is the primary API. The artifact is JVM-compatible; this initial release does not add a separate Java callback facade.
+See [the publishing guide](docs/publishing.md) for JitPack releases and the
+independent Android app that verifies installation from the public repository.
 
 ## Connect and use entities
 

@@ -4,24 +4,24 @@ plugins {
     `java-library`
     `maven-publish`
     id("org.jetbrains.dokka") version "2.2.0"
-    // 0.36 supports the repository's Gradle 8 wrapper; 0.37 requires Gradle 9.
-    id("com.vanniktech.maven.publish.base") version "0.36.0"
 }
 
-group = "io.hivekit"
-version = providers.gradleProperty("releaseVersion").orElse("0.1.0-SNAPSHOT").get()
-val centralRelease = providers.gradleProperty("centralRelease").map { it.toBooleanStrict() }.orElse(false).get()
-require(version.toString().matches(Regex("""\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?"""))) {
-    "Invalid releaseVersion '$version'; use a version such as 0.1.0 or 0.1.0-rc.1"
+group = "com.github.hivekit"
+val jitpackVersion = providers.environmentVariable("VERSION")
+    .filter { providers.environmentVariable("JITPACK").orNull == "true" }
+val sdkVersion = providers.gradleProperty("releaseVersion")
+    .orElse(jitpackVersion.map { it.removePrefix("v") })
+    .orElse("0.1.1-SNAPSHOT")
+    .get()
+require(sdkVersion.matches(Regex("""\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?"""))) {
+    "Invalid releaseVersion '$sdkVersion'; use a version such as 0.1.1 or 0.1.1-rc.1"
 }
-if (centralRelease) {
-    require(providers.gradleProperty("releaseVersion").isPresent && !version.toString().endsWith("-SNAPSHOT", ignoreCase = true)) {
-        "Central releases require an explicit non-SNAPSHOT -PreleaseVersion, for example -PreleaseVersion=0.1.0"
-    }
+require(!jitpackVersion.isPresent || sdkVersion == jitpackVersion.get().removePrefix("v")) {
+    "releaseVersion must match the JitPack VERSION tag"
 }
+// JitPack's Maven version includes the tag prefix; the runtime version does not.
+version = jitpackVersion.orElse(sdkVersion).get()
 
-// Keep the runtime version, binary and sources in agreement for every release.
-val sdkVersion = version.toString()
 val generatedVersionDirectory = layout.buildDirectory.dir("generated/sources/sdkVersion/kotlin")
 val generateSdkVersion by tasks.registering {
     inputs.property("sdkVersion", sdkVersion)
@@ -93,7 +93,7 @@ publishing {
                     url.set("https://github.com/hivekit/client-android")
                     connection.set("scm:git:https://github.com/hivekit/client-android.git")
                     developerConnection.set("scm:git:ssh://git@github.com/hivekit/client-android.git")
-                    tag.set(if (centralRelease) "v$sdkVersion" else "HEAD")
+                    tag.set(jitpackVersion.orElse(if (sdkVersion.endsWith("-SNAPSHOT")) "HEAD" else "v$sdkVersion"))
                 }
             }
         }
@@ -103,14 +103,5 @@ publishing {
             name = "build"
             url = uri(layout.buildDirectory.dir("repository"))
         }
-    }
-}
-
-mavenPublishing {
-    coordinates(group.toString(), "client-android", sdkVersion)
-    // Ordinary builds and local publications need no signing key or Portal token.
-    if (centralRelease) {
-        publishToMavenCentral(automaticRelease = false)
-        signAllPublications()
     }
 }
